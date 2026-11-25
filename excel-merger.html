@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>รวมไฟล์ Excel</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--text:#1c2430;--mute:#667085;--line:#e2e5ea;--pri:#1f7a4d;--pri-t:#fff;--soft:#e8f4ee;--danger:#c0392b}
+@media (prefers-color-scheme:dark){:root{--bg:#14171c;--card:#1d2128;--text:#e8ebf0;--mute:#9aa4b2;--line:#303744;--pri:#3fb27a;--pri-t:#0c1a12;--soft:#1f2e27;--danger:#ef6b5b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:"Noto Sans Thai","Sarabun",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5}
+.wrap{max-width:1000px;margin:0 auto;padding:24px 16px 60px}
+h1{font-size:1.5rem;margin:0 0 4px}
+.sub{color:var(--mute);margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:32px 16px;text-align:center;cursor:pointer;transition:.15s}
+.drop.over,.drop:hover{border-color:var(--pri);background:var(--soft)}
+.drop b{display:block;font-size:1.05rem;margin-bottom:4px}
+.drop span{color:var(--mute);font-size:.9rem}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);padding:8px 16px}
+button:hover{border-color:var(--pri)}
+button.pri{background:var(--pri);color:var(--pri-t);border-color:var(--pri);font-weight:600}
+button.danger{color:var(--danger)}
+button.sm{padding:3px 10px;font-size:.85rem}
+button:disabled{opacity:.5;cursor:not-allowed}
+.fhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px}
+.fname{font-weight:600;word-break:break-all}
+.row{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:12px}
+.row label{display:flex;flex-direction:column;font-size:.85rem;color:var(--mute);gap:4px;min-width:200px}
+select{font:inherit;padding:7px 8px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text)}
+.cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;max-height:200px;overflow:auto;padding:4px}
+.cols label{display:flex;gap:6px;align-items:center;font-size:.9rem;padding:4px 8px;border:1px solid var(--line);border-radius:6px}
+.cols label.iskey{border-color:var(--pri);background:var(--soft)}
+.tools{display:flex;gap:8px;align-items:center;margin-bottom:6px;font-size:.85rem;color:var(--mute)}
+.actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.opt{display:flex;gap:6px;align-items:center;font-size:.9rem}
+.tablebox{overflow:auto;max-height:480px;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;font-size:.85rem;width:max-content;min-width:100%}
+th,td{border-bottom:1px solid var(--line);padding:6px 10px;text-align:left;white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+th{position:sticky;top:0;background:var(--soft)}
+.hint{color:var(--mute);font-size:.85rem}
+.err{color:var(--danger);margin-top:8px}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>รวมไฟล์ Excel</h1>
+  <p class="sub">อัพโหลดไฟล์ได้ไม่จำกัด เลือก Sheet และคอลัมน์ที่ต้องการ กำหนดคอลัมน์เชื่อม (ถ้ามี) แล้วประมวลผล</p>
+
+  <div class="card">
+    <div class="drop" id="drop">
+      <b>คลิกหรือลากไฟล์ Excel มาวางที่นี่</b>
+      <span>รองรับ .xlsx .xls .xlsm .csv — เลือกได้หลายไฟล์ และเพิ่มได้ต่อเนื่อง</span>
+    </div>
+    <input type="file" id="file" multiple accept=".xlsx,.xls,.xlsm,.csv" class="hidden">
+  </div>
+
+  <div id="files"></div>
+
+  <div class="card hidden" id="ctrl">
+    <div class="actions">
+      <label class="opt">รูปแบบการเชื่อม:
+        <select id="mode">
+          <option value="outer">รวมทุกแถว (Full outer)</option>
+          <option value="inner">เฉพาะที่ตรงกันทุกไฟล์ (Inner)</option>
+          <option value="left">ยึดไฟล์แรกเป็นหลัก (Left)</option>
+        </select>
+      </label>
+      <label class="opt"><input type="checkbox" id="src"> เพิ่มคอลัมน์ชื่อไฟล์ต้นทาง</label>
+    </div>
+    <p class="hint">ถ้าไม่เลือกคอลัมน์เชื่อมในไฟล์ใดเลย ระบบจะนำข้อมูลมาต่อกันเป็นแถว (คอลัมน์ชื่อเดียวกันจะรวมอยู่คอลัมน์เดียวกัน) ไฟล์ที่ไม่ได้กำหนดคอลัมน์เชื่อมจะถูกต่อท้ายผลลัพธ์ และคอลัมน์เชื่อมจะถูกรวมในผลลัพธ์เสมอ</p>
+    <div class="actions">
+      <button class="pri" id="run">ประมวลผล</button>
+      <button id="dl" disabled>ดาวน์โหลด Excel</button>
+      <button class="danger" id="reset">Reset</button>
+    </div>
+    <div class="err" id="err"></div>
+  </div>
+
+  <div class="card hidden" id="result">
+    <div class="fhead"><b>ตัวอย่างผลลัพธ์</b><span class="hint" id="info"></span></div>
+    <div class="tablebox"><table id="tbl"></table></div>
+  </div>
+</div>
+
+<script>
+let files = [], merged = null, uid = 0;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function loadSheet(f, name) {
+  f.sheet = name;
+  const aoa = XLSX.utils.sheet_to_json(f.wb.Sheets[name], {header:1, defval:'', raw:true});
+  const first = aoa[0] || [];
+  const seen = {};
+  f.headers = first.map((h, i) => {
+    let n = String(h).trim() || `คอลัมน์ ${i + 1}`;
+    if (seen[n]) { seen[n]++; n += ` (${seen[n]})`; } else seen[n] = 1;
+    return n;
+  });
+  f.rows = aoa.slice(1).filter(r => r.some(v => v !== ''));
+  f.selected = new Set(f.headers.map((_, i) => i));
+  f.key = '';
+}
+
+async function addFiles(list) {
+  for (const file of list) {
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, {type:'array'});
+      const f = {id: ++uid, name: file.name, wb};
+      loadSheet(f, wb.SheetNames[0]);
+      files.push(f);
+    } catch (e) { alert('อ่านไฟล์ไม่ได้: ' + file.name); }
+  }
+  render();
+}
+
+function render() {
+  $('ctrl').classList.toggle('hidden', !files.length);
+  $('files').innerHTML = files.map(f => `
+    <div class="card" data-id="${f.id}">
+      <div class="fhead"><span class="fname">📄 ${esc(f.name)}</span><button class="sm danger" data-act="rm">ลบไฟล์</button></div>
+      <div class="row">
+        <label>เลือก Sheet
+          <select data-act="sheet">${f.wb.SheetNames.map(s => `<option ${s === f.sheet ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>
+        </label>
+        <label>คอลัมน์เชื่อม (ไม่บังคับ)
+          <select data-act="key"><option value="">— ไม่มี —</option>${f.headers.map((h, i) => `<option value="${i}" ${String(i) === f.key ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select>
+        </label>
+        <span class="hint" style="align-self:end">${f.rows.length.toLocaleString()} แถว · ${f.headers.length} คอลัมน์</span>
+      </div>
+      <div class="tools">คอลัมน์ที่ต้องการรวม:
+        <button class="sm" data-act="all">เลือกทั้งหมด</button>
+        <button class="sm" data-act="none">ไม่เลือก</button>
+      </div>
+      <div class="cols">${f.headers.map((h, i) => `
+        <label class="${String(i) === f.key ? 'iskey' : ''}"><input type="checkbox" data-act="col" data-i="${i}" ${f.selected.has(i) || String(i) === f.key ? 'checked' : ''} ${String(i) === f.key ? 'disabled' : ''}> ${esc(h)}${String(i) === f.key ? ' 🔑' : ''}</label>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+$('files').addEventListener('click', e => {
+  const act = e.target.dataset.act; if (!act) return;
+  const f = files.find(x => x.id == e.target.closest('.card').dataset.id);
+  if (act === 'rm') files = files.filter(x => x !== f);
+  else if (act === 'all') f.selected = new Set(f.headers.map((_, i) => i));
+  else if (act === 'none') f.selected = new Set();
+  else return;
+  render();
+});
+$('files').addEventListener('change', e => {
+  const act = e.target.dataset.act; if (!act) return;
+  const f = files.find(x => x.id == e.target.closest('.card').dataset.id);
+  if (act === 'sheet') loadSheet(f, e.target.value);
+  else if (act === 'key') f.key = e.target.value;
+  else if (act === 'col') { const i = +e.target.dataset.i; e.target.checked ? f.selected.add(i) : f.selected.delete(i); return; }
+  render();
+});
+
+function short(n) { return n.replace(/\.[^.]+$/, ''); }
+const keyOf = v => String(v ?? '').trim();
+
+function process() {
+  const outCols = [];
+  const addCol = n => { if (!outCols.includes(n)) outCols.push(n); };
+  const joinF = files.filter(f => f.key !== '');
+  const stackF = files.filter(f => f.key === '');
+  const mode = $('mode').value;
+  let result = [];
+
+  if (joinF.length) {
+    const keyName = joinF[0].headers[+joinF[0].key];
+    addCol(keyName);
+    joinF.forEach((f, fi) => {
+      const k = +f.key;
+      const cols = [...f.selected].filter(i => i !== k).sort((a, b) => a - b);
+      const names = {};
+      cols.forEach(i => {
+        let n = f.headers[i];
+        if (fi > 0 && outCols.includes(n)) n += ` (${short(f.name)})`;
+        names[i] = n; addCol(n);
+      });
+      const rows = f.rows.map(r => {
+        const o = {[keyName]: r[k]};
+        cols.forEach(i => o[names[i]] = r[i]);
+        return {k: keyOf(r[k]), o, src: [f.name]};
+      });
+      if (fi === 0) { result = rows; return; }
+      const idx = {};
+      rows.forEach(r => { if (r.k !== '') (idx[r.k] = idx[r.k] || []).push(r); });
+      const used = new Set(), next = [];
+      result.forEach(l => {
+        const ms = l.k !== '' ? idx[l.k] : null;
+        if (ms) { used.add(l.k); ms.forEach(m => next.push({k: l.k, o: {...l.o, ...m.o}, src: [...l.src, f.name]})); }
+        else if (mode !== 'inner') next.push(l);
+      });
+      if (mode === 'outer') rows.forEach(r => { if (!used.has(r.k) || r.k === '') next.push(r); });
+      result = next;
+    });
+  }
+
+  stackF.forEach(f => {
+    const cols = [...f.selected].sort((a, b) => a - b);
+    cols.forEach(i => addCol(f.headers[i]));
+    f.rows.forEach(r => {
+      const o = {};
+      cols.forEach(i => o[f.headers[i]] = r[i]);
+      result.push({o, src: [f.name]});
+    });
+  });
+
+  if (!outCols.length) return null;
+  const head = $('src').checked ? [...outCols, 'ไฟล์ต้นทาง'] : outCols;
+  const body = result.map(r => {
+    const row = outCols.map(c => r.o[c] ?? '');
+    if ($('src').checked) row.push(r.src.join(', '));
+    return row;
+  });
+  return [head, ...body];
+}
+
+$('run').onclick = () => {
+  $('err').textContent = '';
+  merged = process();
+  if (!merged) { $('err').textContent = 'กรุณาเลือกอย่างน้อย 1 คอลัมน์'; return; }
+  const [head, ...body] = merged;
+  const show = body.slice(0, 100);
+  $('tbl').innerHTML = `<thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${show.map(r => `<tr>${r.map(v => `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody>`;
+  $('info').textContent = `ทั้งหมด ${body.length.toLocaleString()} แถว · ${head.length} คอลัมน์ (แสดง ${show.length} แถวแรก)`;
+  $('result').classList.remove('hidden');
+  $('dl').disabled = false;
+  $('result').scrollIntoView({behavior:'smooth'});
+};
+
+$('dl').onclick = () => {
+  if (!merged) return;
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(merged), 'Merged');
+  XLSX.writeFile(wb, 'merged.xlsx');
+};
+
+$('reset').onclick = () => {
+  files = []; merged = null; $('file').value = '';
+  $('result').classList.add('hidden'); $('dl').disabled = true;
+  $('err').textContent = ''; $('src').checked = false; $('mode').value = 'outer';
+  render();
+};
+
+const drop = $('drop');
+drop.onclick = () => $('file').click();
+$('file').onchange = e => { addFiles([...e.target.files]); e.target.value = ''; };
+['dragover', 'dragenter'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => addFiles([...e.dataTransfer.files]));
+</script>
+</body>
+</html>
